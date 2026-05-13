@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Светлая тема (по умолчанию) ─────────────────────────────────────────── */
+:root {
+  --color-bg:       #f4f6f9;
+  --color-surface:  #ffffff;
+  --color-surface2: #eef1f6;
+  --color-border:   #dde2ed;
+  --color-muted:    #6b7a99;
+  --color-fg:       #1a202c;
+  --color-input:    #f8f9fc;
+}
+
+/* ── Тёмная тема ─────────────────────────────────────────────────────────── */
+.dark {
+  --color-bg:       #0d1117;
+  --color-surface:  #161b27;
+  --color-surface2: #0a0e18;
+  --color-border:   #2a2f3e;
+  --color-muted:    #8b949e;
+  --color-fg:       #e6edf3;
+  --color-input:    #1e2535;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Залипание первого столбца таблицы */
+.table-sticky td:first-child,
+.table-sticky th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+/* Скроллбар */
+::-webkit-scrollbar { height: 6px; width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
