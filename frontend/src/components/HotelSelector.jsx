@@ -1,14 +1,3 @@
-export const HOTELS = [
-  { id: 'all',        name: 'Все отели' },
-  { id: 'rubinstein', name: 'Рубинштейна' },
-  { id: 'italiana',   name: 'Итальянская' },
-  { id: 'nevsky',     name: 'Невский' },
-  { id: 'gold',       name: 'GOLD' },
-  { id: 'centralniy', name: 'Центральный' },
-  { id: 'point',      name: 'Поинт' },
-  { id: 'lesnaya',    name: 'Лесная Ривьера' },
-]
-
 export default function HotelSelector({ hotel, setHotel }) {
   return (
     <select
@@ -17,9 +6,18 @@ export default function HotelSelector({ hotel, setHotel }) {
       className="bg-surface border border-border text-fg text-sm rounded-md px-3 py-1.5
                  cursor-pointer focus:outline-none focus:border-gold transition-colors"
     >
-      {HOTELS.map(h => (
-        <option key={h.id} value={h.id}>{h.name}</option>
-      ))}
+      <option value="all">Все отели</option>
+      <optgroup label="— Городские —">
+        <option value="rubinstein">Рубинштейна</option>
+        <option value="italiana">Итальянская</option>
+        <option value="nevsky">Невский</option>
+        <option value="gold">GOLD</option>
+        <option value="centralniy">Центральный</option>
+        <option value="point">Поинт</option>
+      </optgroup>
+      <optgroup label="— Загородные —">
+        <option value="lesnaya">Лесная Ривьера</option>
+      </optgroup>
     </select>
   )
 }

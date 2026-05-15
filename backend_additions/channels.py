@@ -34,8 +34,8 @@ CALL_GOAL_IDS = [145399474, 145399738, 145399876, 145399951, 145400482, 14679441
 # ── Фильтры по разделу сайта ──────────────────────────────────────────────────
 SECTION_FILTERS: dict[str, Optional[str]] = {
     "hotels":    None,
-    "franchise": "ym:s:URLPath=~'/franshiza/'",
-    "uk":        "ym:s:URLPath=~'/uk/'",
+    "franchise": "ym:s:startURL=~'.*franshiza.*'",
+    "uk":        "ym:s:startURL=~'.*/uk/.*'",
 }
 
 ALL_CHANNELS = [
@@ -45,6 +45,10 @@ ALL_CHANNELS = [
 ]
 
 BRAND_KEYWORDS = {"kaleid", "калейд", "brand", "бренд"}
+
+# Русские названия источников трафика из Яндекс.Метрики (lang=ru)
+_ORGANIC_RU = ("переходы из поисковых систем", "поисковые системы")
+_DIRECT_RU  = ("прямые заходы", "прямой")
 
 
 # ── Вспомогательные функции ───────────────────────────────────────────────────
@@ -58,6 +62,14 @@ def _period_dates(period: str) -> tuple[date, date]:
 def _prev_period(period: str) -> str:
     year, month = map(int, period.split("-"))
     return f"{year - 1}-12" if month == 1 else f"{year}-{month - 1:02d}"
+
+
+def _is_organic(trf: str) -> bool:
+    return trf in ("organic", "search") or any(r in trf for r in _ORGANIC_RU)
+
+
+def _is_direct(trf: str) -> bool:
+    return trf == "direct" or any(r in trf for r in _DIRECT_RU)
 
 
 def _classify(utm_source: str, utm_medium: str, utm_campaign: str,
@@ -74,9 +86,9 @@ def _classify(utm_source: str, utm_medium: str, utm_campaign: str,
     if src in ("vk", "vkontakte") or src.startswith("vk."): return "ВКонтакте"
     if "telegram" in src or src == "tg":                     return "Telegram"
     if "travelline" in src or med == "email":                return "Рассылки TravelLine"
-    if (trf in ("organic", "search")) and not src:
+    if _is_organic(trf) and not src:
         return "Поиск брендовый" if any(k in cmp for k in BRAND_KEYWORDS) else "Поиск общий"
-    if trf == "direct" and not src:                          return "Прямой трафик"
+    if _is_direct(trf) and not src:                          return "Прямой трафик"
     return None
 
 
@@ -187,13 +199,11 @@ async def get_channels(
     current_user: User          = Depends(get_current_user),
     db:           AsyncSession  = Depends(get_db),
 ):
-    # ── Получаем токен из БД (так же, как в metrika.py) ─────────────────────
     token = await TokenService.get_decrypted_token(db, str(current_user.id))
     if not token:
         raise HTTPException(403, "Токен Яндекс.Метрики не найден. "
                                  "Добавьте токен в настройках сайта.")
 
-    # ── Получаем counter_id из website пользователя ──────────────────────────
     result = await db.execute(
         select(Website).where(Website.user_id == current_user.id).limit(1)
     )
@@ -217,7 +227,7 @@ async def get_channels(
             _fetch(token, counter_id, pd1.isoformat(), pd2.isoformat(), sf),
         )
     except httpx.HTTPStatusError as e:
-        raise HTTPException(502, f"Яндекс.Метрика API: {e.response.status_code}")
+        raise HTTPException(502, f"Яндекс.Метрика API: {e.response.status_code} — {e.response.text[:300]}")
     except Exception as e:
         raise HTTPException(502, f"Ошибка запроса к Метрике: {e}")
 
