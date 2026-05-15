@@ -1,8 +1,16 @@
-const BASE = '/api/v1'   // backend работает на /api/v1/...
+const BASE = '/api/v1'
+
+function getToken() {
+  return localStorage.getItem('access_token')
+}
 
 async function request(path, options = {}) {
+  const token = getToken()
   const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...options,
   })
   if (!res.ok) {
@@ -10,6 +18,29 @@ async function request(path, options = {}) {
     throw new Error(`${res.status}: ${text || res.statusText}`)
   }
   return res.json()
+}
+
+export async function login(email, password) {
+  const res = await fetch(BASE + '/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Ошибка входа')
+  }
+  const data = await res.json()
+  localStorage.setItem('access_token', data.access_token)
+  return data
+}
+
+export function logout() {
+  localStorage.removeItem('access_token')
+}
+
+export function isAuthenticated() {
+  return !!getToken()
 }
 
 export function fetchChannelData({ section, period, hotel }) {

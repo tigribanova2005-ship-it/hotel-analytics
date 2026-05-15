@@ -4,7 +4,8 @@ import SectionTabs from './components/SectionTabs'
 import MonthPicker from './components/MonthPicker'
 import HotelSelector from './components/HotelSelector'
 import ChannelTable from './components/ChannelTable'
-import { fetchChannelData, saveBudget } from './api'
+import LoginPage from './components/LoginPage'
+import { fetchChannelData, saveBudget, isAuthenticated, logout } from './api'
 
 function currentPeriod() {
   const d = new Date()
@@ -24,6 +25,7 @@ const SECTION_LABELS = {
 }
 
 export default function App() {
+  const [authed,  setAuthed]  = useState(isAuthenticated)
   const [dark,    setDark]    = useState(false)
   const [section, setSection] = useState('hotels')
   const [period,  setPeriod]  = useState(currentPeriod)
@@ -32,19 +34,26 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
 
-  // Применяем тему на <html>
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
   }, [dark])
 
   const load = useCallback(() => {
+    if (!authed) return
     setLoading(true)
     setError(null)
     fetchChannelData({ section, period, hotel })
       .then(setData)
-      .catch(e => setError(e.message))
+      .catch(e => {
+        if (e.message.startsWith('401') || e.message.startsWith('403')) {
+          logout()
+          setAuthed(false)
+        } else {
+          setError(e.message)
+        }
+      })
       .finally(() => setLoading(false))
-  }, [section, period, hotel])
+  }, [section, period, hotel, authed])
 
   useEffect(() => { load() }, [load])
 
@@ -53,18 +62,27 @@ export default function App() {
     load()
   }
 
+  function handleLogout() {
+    logout()
+    setAuthed(false)
+    setData(null)
+  }
+
+  if (!authed) {
+    return <LoginPage onLogin={() => setAuthed(true)} />
+  }
+
   const [y, m] = period.split('-').map(Number)
   const periodLabel = `${MONTHS[m - 1]} ${y}`
   const hotelLabel  = hotel !== 'all' ? ` · ${HOTEL_NAMES[hotel] ?? hotel}` : ''
 
   return (
     <div className="min-h-screen bg-bg flex flex-col">
-      <Header dark={dark} onToggleTheme={() => setDark(d => !d)} />
+      <Header dark={dark} onToggleTheme={() => setDark(d => !d)} onLogout={handleLogout} />
 
       <div className="flex-1 flex flex-col px-6 py-4 gap-4 min-w-0">
         <SectionTabs section={section} setSection={s => { setSection(s); setHotel('all') }} />
 
-        {/* Тулбар */}
         <div className="flex items-center gap-3 flex-wrap">
           <MonthPicker period={period} setPeriod={setPeriod} />
           {section === 'hotels' && (
@@ -75,23 +93,17 @@ export default function App() {
           )}
         </div>
 
-        {/* Подпись раздела */}
         <div className="text-xs text-muted uppercase tracking-wider">
           {SECTION_LABELS[section]}{hotelLabel} · {periodLabel}
         </div>
 
-        {/* Ошибка */}
         {error && (
           <div className="rounded-md bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700
                           text-red-700 dark:text-red-300 px-4 py-3 text-sm">
             <strong>Ошибка загрузки:</strong> {error}
-            <div className="mt-1 text-xs opacity-75">
-              Убедитесь, что backend запущен и роутеры подключены (см. api/HOW_TO_CONNECT.md)
-            </div>
           </div>
         )}
 
-        {/* Таблица */}
         {!error && (
           <ChannelTable
             data={data}
