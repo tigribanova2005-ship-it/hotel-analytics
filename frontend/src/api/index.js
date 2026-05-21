@@ -79,5 +79,18 @@ export function fetchTLPromos({ period }) {
 
 export function fetchHistory({ period, section }) {
   const q = new URLSearchParams({ period, section })
-  return request(`/channels/history?${q}`)
+  return request(`/channels/history?${q}`).then(raw => {
+    // Backend returns { months: [...], data: [{period, visitors, calls, bookings},...] }
+    // TrendsPage expects { periods: [...], metrics: { visitors, bookings, revenue, bounces } }
+    const items = raw.data ?? []
+    return {
+      periods:  items.map(d => d.period),
+      metrics: {
+        visitors: items.map(d => d.visitors ?? null),
+        bookings: items.map(d => d.bookings ?? null),
+        revenue:  items.map(() => null),  // not provided by backend yet
+        bounces:  items.map(() => null),  // not provided by backend yet
+      },
+    }
+  })
 }
