@@ -61,3 +61,23 @@ export function saveBudget(budget) {
     body: JSON.stringify(budget),
   })
 }
+
+export function fetchTLBookings({ period }) {
+  const q = new URLSearchParams({ period })
+  return request(`/travelline/bookings?${q}`)
+}
+
+export function fetchTLHotels({ period }) {
+  const q = new URLSearchParams({ period })
+  return request(`/travelline/hotels?${q}`)
+}
+
+export function fetchTLPromos({ period }) {
+  const q = new URLSearchParams({ period })
+  return request(`/travelline/promos?${q}`)
+}
+
+export function fetchHistory({ period, section }) {
+  const q = new URLSearchParams({ period, section })
+  return request(`/channels/history?${q}`)
+}

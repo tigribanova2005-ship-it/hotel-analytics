@@ -14,7 +14,7 @@ export default function SectionTabs({ section, setSection }) {
           className={`
             px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px
             ${section === tab.id
-              ? 'border-gold text-gold'
+              ? 'border-brand-navy text-brand-navy'
               : 'border-transparent text-muted hover:text-fg'
             }
           `}

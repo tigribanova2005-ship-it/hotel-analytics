@@ -12,7 +12,13 @@ export default {
         muted:    'var(--color-muted)',
         fg:       'var(--color-fg)',
         input:    'var(--color-input)',
-        gold:     '#c9a96e',
+        brand: {
+          dark:    '#1A1212',
+          navy:    '#0D2B4E',
+          green:   '#3A5C2E',
+          burgundy:'#7A1500',
+          beige:   '#C4956A',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

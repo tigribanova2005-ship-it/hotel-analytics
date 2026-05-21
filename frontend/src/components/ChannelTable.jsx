@@ -1,74 +1,73 @@
 import { useState } from 'react'
 
 export const CHANNELS = [
-  'Поиск брендовый',
-  'Поиск общий',
   'Яндекс.Директ',
   'Яндекс.Карты',
-  'Google.Карты',
-  '2ГИС',
-  'Прямой трафик',
-  'ВКонтакте',
-  'Telegram',
+  'Поисковый (SEO)',
+  '2GIS',
+  'Прямые заходы',
   'Рассылки TravelLine',
+  'Google Карты',
+  'ВКонтакте',
+  'Прочее',
 ]
 
-const COLUMNS = [
-  { key: 'visitors',       label: 'Посетители',        fmt: 'int',     tooltip: 'Уникальные посетители из Яндекс.Метрики' },
-  { key: 'visitors_delta', label: '△%',                fmt: 'delta',   tooltip: 'Изменение к прошлому месяцу' },
-  { key: 'bounces',        label: 'Отказы',            fmt: 'percent', tooltip: 'Доля визитов < 15 сек с одной страницей' },
-  { key: 'room_interest',  label: 'Интерес к номерам', fmt: 'int',     tooltip: 'Цель "Выбор номера" (/search)' },
-  { key: 'calls',          label: 'Звонки',            fmt: 'int',     tooltip: 'Цель "Звонок" по номерам отелей' },
-  { key: 'bookings',       label: 'Брони',             fmt: 'int',     tooltip: 'Цель "Бронирование" (Travelline)' },
-  { key: 'revenue',        label: 'Доход',             fmt: 'money',   tooltip: 'Выручка по подтверждённым броням' },
-  { key: 'avg_check',      label: 'Средний чек',       fmt: 'money',   tooltip: 'Доход / Брони' },
-  { key: 'costs',          label: 'Затраты',           fmt: 'money',   editable: true, tooltip: 'Бюджет (вручную, кроме Директа)' },
-  { key: 'cpl',            label: 'CPL',               fmt: 'money',   tooltip: 'Затраты / (Звонки + Брони)' },
-  { key: 'roi',            label: 'ROI',               fmt: 'roi',     tooltip: '(Доход − Затраты) / Затраты × 100%' },
-]
-
-// ── Форматирование ────────────────────────────────────────────────────────────
-
-function format(value, fmt) {
-  if (value == null) return '—'
-  const n = Number(value)
-  switch (fmt) {
-    case 'int':     return n.toLocaleString('ru-RU')
-    case 'money':   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽'
-    case 'percent': return n.toFixed(1) + '%'
-    case 'delta':   return (n > 0 ? '+' : '') + n.toFixed(1) + '%'
-    case 'roi':     return (n > 0 ? '+' : '') + n.toFixed(0) + '%'
-    default:        return String(value)
-  }
+const DEFAULT_INFLUENCE = {
+  'Яндекс.Директ':    'increase',
+  'Яндекс.Карты':     'max',
+  '2GIS':             'launch',
+  'ВКонтакте':        'launch',
+  'Поисковый (SEO)':  'increase',
 }
 
-function deltaClass(value, fmt) {
-  if (fmt !== 'delta' && fmt !== 'roi') return ''
-  if (value == null) return ''
-  const n = Number(value)
-  if (n > 0) return 'text-emerald-600 dark:text-emerald-400 font-medium'
-  if (n < 0) return 'text-red-600 dark:text-red-400 font-medium'
-  return ''
+const INFLUENCE_BADGE = {
+  increase: { icon: '▲', label: 'Рост',    color: '#3A5C2E' },
+  max:      { icon: '●', label: 'Макс',    color: '#0D2B4E' },
+  launch:   { icon: '◆', label: 'Запуск',  color: '#e07b00' },
+  none:     { icon: '—', label: '',         color: '#6b7a99' },
 }
 
-// ── Инлайн-редактирование бюджета ─────────────────────────────────────────────
+// ── Format helpers ─────────────────────────────────────────────────────────────
 
-function EditableCell({ value, onSave }) {
+function fmtMoney(n) {
+  if (n == null) return '—'
+  return Number(n).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽'
+}
+
+function fmtInt(n) {
+  if (n == null) return '—'
+  return Number(n).toLocaleString('ru-RU')
+}
+
+function fmtPercent(n) {
+  if (n == null) return '—'
+  return Number(n).toFixed(1) + '%'
+}
+
+// ── Editable budget cell ───────────────────────────────────────────────────────
+
+function BudgetCell({ value, onSave }) {
   const [editing, setEditing] = useState(false)
-  const [input, setInput]     = useState('')
+  const [input,   setInput]   = useState('')
+
+  function commit() {
+    setEditing(false)
+    if (input !== '') onSave(Number(input))
+  }
 
   if (editing) {
     return (
       <input
         autoFocus
         type="number"
-        className="w-24 bg-input border border-gold rounded px-2 py-0.5 text-right text-sm text-fg
+        className="w-24 bg-input border rounded px-2 py-0.5 text-right text-sm text-fg
                    focus:outline-none tabular-nums"
+        style={{ borderColor: '#0D2B4E' }}
         value={input}
         onChange={e => setInput(e.target.value)}
-        onBlur={() => { setEditing(false); if (input !== '') onSave(Number(input)) }}
+        onBlur={commit}
         onKeyDown={e => {
-          if (e.key === 'Enter')  { setEditing(false); if (input !== '') onSave(Number(input)) }
+          if (e.key === 'Enter')  commit()
           if (e.key === 'Escape') setEditing(false)
         }}
       />
@@ -78,66 +77,80 @@ function EditableCell({ value, onSave }) {
   return (
     <button
       onClick={() => { setInput(value ?? ''); setEditing(true) }}
-      className="text-right w-full tabular-nums text-muted hover:text-gold transition-colors underline decoration-dotted"
+      className="text-right w-full tabular-nums text-muted hover:text-fg transition-colors underline decoration-dotted"
       title="Нажмите, чтобы ввести бюджет"
     >
-      {value != null ? format(value, 'money') : '+ ввести'}
+      {value != null ? fmtMoney(value) : '+ ввести'}
     </button>
   )
 }
 
-// ── Скелетон ─────────────────────────────────────────────────────────────────
+// ── Influence badge ────────────────────────────────────────────────────────────
+
+function InfluenceBadge({ channel, budgetMap }) {
+  const influence = (budgetMap[channel]?.influence) ?? DEFAULT_INFLUENCE[channel] ?? 'none'
+  const cfg = INFLUENCE_BADGE[influence] ?? INFLUENCE_BADGE.none
+  return (
+    <span className="text-xs font-medium" style={{ color: cfg.color }}>
+      {cfg.icon}{cfg.label ? ' ' + cfg.label : ''}
+    </span>
+  )
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function SkeletonRow({ index }) {
+  const cols = 9
   return (
     <tr className={index % 2 === 0 ? 'bg-surface' : 'bg-surface2'}>
       <td className="py-3 px-4 bg-inherit">
         <div className="h-4 w-32 bg-border rounded animate-pulse" />
       </td>
-      {COLUMNS.map(col => (
-        <td key={col.key} className="py-3 px-3">
-          <div className="h-4 w-16 bg-border rounded animate-pulse ml-auto" />
+      {Array.from({ length: cols }).map((_, i) => (
+        <td key={i} className="py-3 px-3">
+          <div className="h-4 w-14 bg-border rounded animate-pulse ml-auto" />
         </td>
       ))}
     </tr>
   )
 }
 
-// ── Тултип ────────────────────────────────────────────────────────────────────
+// ── Main table ────────────────────────────────────────────────────────────────
 
-function Tooltip({ text, children }) {
-  return (
-    <span className="relative group inline-flex items-center">
-      {children}
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block
-                       bg-fg text-surface rounded px-2 py-1 text-xs whitespace-nowrap z-10 shadow-lg">
-        {text}
-      </span>
-    </span>
-  )
-}
+export default function ChannelTable({ data, budgetMap = {}, loading, onBudgetSave }) {
+  const channels    = data?.channels ?? {}
+  const totals      = data?.totals   ?? {}
+  const totalVisitors = totals.visitors || 1
 
-// ── Главная таблица ───────────────────────────────────────────────────────────
-
-export default function ChannelTable({ data, loading, onBudgetSave }) {
-  const channels = data?.channels ?? {}
-  const totals   = data?.totals   ?? {}
+  // Compute totals for cost-per-booking
+  let totalBudget   = 0
+  let totalBookings = 0
+  for (const ch of CHANNELS) {
+    const budget = budgetMap[ch]?.amount
+    const bookings = channels[ch]?.bookings ?? 0
+    if (budget != null) totalBudget += budget
+    totalBookings += bookings
+  }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
-      <table className="w-full text-sm border-collapse table-sticky min-w-[1100px]">
+      <table className="w-full text-sm border-collapse table-sticky" style={{ minWidth: '1100px' }}>
 
-        {/* Шапка */}
+        {/* Header */}
         <thead>
           <tr className="bg-surface border-b-2 border-border">
-            <th className="text-left py-3 px-4 font-semibold text-muted bg-surface min-w-[185px] text-xs uppercase tracking-wider">
+            <th className="text-left py-3 px-4 font-semibold text-muted bg-surface min-w-[180px]
+                           text-xs uppercase tracking-wider sticky left-0 z-10">
               Канал
             </th>
-            {COLUMNS.map(col => (
-              <th key={col.key} className="text-right py-3 px-3 font-semibold text-muted text-xs uppercase tracking-wider whitespace-nowrap min-w-[90px]">
-                <Tooltip text={col.tooltip}>
-                  <span className="cursor-help border-b border-dotted border-muted">{col.label}</span>
-                </Tooltip>
+            {[
+              'Бюджет ₽', 'Трафик %', 'Броней', 'Доход ₽', 'Ср.чек ₽',
+              'Ст-сть брони', 'ROAS', 'Влияние бюджета',
+            ].map(h => (
+              <th key={h}
+                className="text-right py-3 px-3 font-semibold text-muted text-xs uppercase
+                           tracking-wider whitespace-nowrap min-w-[90px]">
+                {h}
               </th>
             ))}
           </tr>
@@ -147,46 +160,94 @@ export default function ChannelTable({ data, loading, onBudgetSave }) {
           {loading
             ? CHANNELS.map((_, i) => <SkeletonRow key={i} index={i} />)
             : CHANNELS.map((channel, i) => {
-                const row = channels[channel] ?? {}
+                const row      = channels[channel] ?? {}
+                const budget   = budgetMap[channel]?.amount ?? null
+                const visitors = row.visitors ?? 0
+                const bookings = row.bookings ?? 0
+                const trafficPct = totalVisitors > 0
+                  ? (visitors / totalVisitors * 100).toFixed(1) + '%'
+                  : '0.0%'
+                const costPerBooking = (budget && bookings > 0)
+                  ? fmtMoney(budget / bookings)
+                  : '—'
+
                 return (
                   <tr
                     key={channel}
-                    className={`border-b border-border hover:bg-gold/5 transition-colors ${
+                    className={`border-b border-border transition-colors ${
                       i % 2 === 0 ? 'bg-surface' : 'bg-surface2'
                     }`}
+                    style={{ '--tw-bg-opacity': 1 }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#0D2B4E11'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}
                   >
-                    <td className="py-3 px-4 font-medium text-fg bg-inherit whitespace-nowrap">
+                    <td className="py-3 px-4 font-medium text-fg bg-inherit whitespace-nowrap sticky left-0 z-10">
                       {channel}
                     </td>
-                    {COLUMNS.map(col => (
-                      <td
-                        key={col.key}
-                        className={`py-3 px-3 text-right tabular-nums whitespace-nowrap ${deltaClass(row[col.key], col.fmt)}`}
-                      >
-                        {col.editable
-                          ? <EditableCell value={row[col.key]} onSave={v => onBudgetSave(channel, v)} />
-                          : <span className={row[col.key] == null ? 'text-border' : 'text-fg'}>
-                              {format(row[col.key], col.fmt)}
-                            </span>
-                        }
-                      </td>
-                    ))}
+
+                    {/* Бюджет */}
+                    <td className="py-3 px-3 text-right tabular-nums">
+                      <BudgetCell
+                        value={budget}
+                        onSave={v => onBudgetSave(channel, v)}
+                      />
+                    </td>
+
+                    {/* Трафик % */}
+                    <td className="py-3 px-3 text-right tabular-nums text-fg">
+                      {trafficPct}
+                    </td>
+
+                    {/* Броней */}
+                    <td className="py-3 px-3 text-right tabular-nums text-fg">
+                      {fmtInt(bookings || null)}
+                    </td>
+
+                    {/* Доход — future */}
+                    <td className="py-3 px-3 text-right text-muted">—</td>
+
+                    {/* Ср.чек — future */}
+                    <td className="py-3 px-3 text-right text-muted">—</td>
+
+                    {/* Ст-сть брони */}
+                    <td className="py-3 px-3 text-right tabular-nums text-fg">
+                      {costPerBooking}
+                    </td>
+
+                    {/* ROAS — future */}
+                    <td className="py-3 px-3 text-right text-muted">—</td>
+
+                    {/* Влияние бюджета */}
+                    <td className="py-3 px-3 text-right">
+                      <InfluenceBadge channel={channel} budgetMap={budgetMap} />
+                    </td>
                   </tr>
                 )
               })
           }
 
-          {/* Итого */}
+          {/* Totals row */}
           {!loading && (
-            <tr className="border-t-2 border-gold/60 bg-surface font-semibold">
-              <td className="py-3 px-4 text-gold bg-surface">Итого</td>
-              {COLUMNS.map(col => (
-                <td key={col.key} className={`py-3 px-3 text-right tabular-nums whitespace-nowrap ${deltaClass(totals[col.key], col.fmt)}`}>
-                  <span className={totals[col.key] == null ? 'text-muted' : 'text-fg'}>
-                    {format(totals[col.key], col.fmt)}
-                  </span>
-                </td>
-              ))}
+            <tr className="border-t-2 bg-surface font-semibold" style={{ borderColor: '#0D2B4E66' }}>
+              <td className="py-3 px-4 bg-surface sticky left-0 z-10" style={{ color: '#0D2B4E' }}>
+                Итого
+              </td>
+              <td className="py-3 px-3 text-right tabular-nums text-fg">
+                {totalBudget > 0 ? fmtMoney(totalBudget) : '—'}
+              </td>
+              <td className="py-3 px-3 text-right tabular-nums text-fg">100%</td>
+              <td className="py-3 px-3 text-right tabular-nums text-fg">
+                {fmtInt(totalBookings || null)}
+              </td>
+              <td className="py-3 px-3 text-right text-muted">—</td>
+              <td className="py-3 px-3 text-right text-muted">—</td>
+              <td className="py-3 px-3 text-right tabular-nums text-fg">
+                {totalBudget > 0 && totalBookings > 0
+                  ? fmtMoney(totalBudget / totalBookings)
+                  : '—'}
+              </td>
+              <td className="py-3 px-3 text-right text-muted">—</td>
+              <td className="py-3 px-3 text-right" />
             </tr>
           )}
         </tbody>

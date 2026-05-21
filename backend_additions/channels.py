@@ -2,6 +2,7 @@
 app/api/v1/channels.py
 
 GET /api/v1/channels — таблица каналов за месяц.
+GET /api/v1/channels/history — история за последние 6 месяцев.
 Использует ту же авторизацию и TokenService что и остальные эндпоинты.
 """
 
@@ -39,12 +40,16 @@ SECTION_FILTERS: dict[str, Optional[str]] = {
 }
 
 ALL_CHANNELS = [
-    "Поиск брендовый", "Поиск общий", "Яндекс.Директ", "Яндекс.Карты",
-    "Google.Карты", "2ГИС", "Прямой трафик", "ВКонтакте",
-    "Telegram", "Рассылки TravelLine",
+    "Яндекс.Директ",
+    "Яндекс.Карты",
+    "Поисковый (SEO)",
+    "2GIS",
+    "Прямые заходы",
+    "Рассылки TravelLine",
+    "Google Карты",
+    "ВКонтакте",
+    "Прочее",
 ]
-
-BRAND_KEYWORDS = {"kaleid", "калейд", "brand", "бренд"}
 
 # Русские названия источников трафика из Яндекс.Метрики (lang=ru)
 _ORGANIC_RU = ("переходы из поисковых систем", "поисковые системы")
@@ -64,6 +69,16 @@ def _prev_period(period: str) -> str:
     return f"{year - 1}-12" if month == 1 else f"{year}-{month - 1:02d}"
 
 
+def _prev_period_n(period: str, n: int) -> list[str]:
+    """Return list of n periods going back from period (inclusive of period itself)."""
+    periods = []
+    current = period
+    for _ in range(n):
+        periods.append(current)
+        current = _prev_period(current)
+    return list(reversed(periods))
+
+
 def _is_organic(trf: str) -> bool:
     return trf in ("organic", "search") or any(r in trf for r in _ORGANIC_RU)
 
@@ -73,23 +88,20 @@ def _is_direct(trf: str) -> bool:
 
 
 def _classify(utm_source: str, utm_medium: str, utm_campaign: str,
-               traffic_source: str) -> Optional[str]:
+               traffic_source: str) -> str:
     src = utm_source.lower().strip()
     med = utm_medium.lower().strip()
-    cmp = utm_campaign.lower().strip()
     trf = traffic_source.lower().strip()
 
     if src and "yandex" in src and "map" in src:             return "Яндекс.Карты"
-    if src and "google" in src and "map" in src:             return "Google.Карты"
-    if src and "2gis"   in src:                              return "2ГИС"
+    if src and "google" in src and "map" in src:             return "Google Карты"
+    if src and "2gis" in src:                                return "2GIS"
     if src == "yandex" and med in ("cpc", "paid", "cpm"):   return "Яндекс.Директ"
     if src in ("vk", "vkontakte") or src.startswith("vk."): return "ВКонтакте"
-    if "telegram" in src or src == "tg":                     return "Telegram"
     if "travelline" in src or med == "email":                return "Рассылки TravelLine"
-    if _is_organic(trf) and not src:
-        return "Поиск брендовый" if any(k in cmp for k in BRAND_KEYWORDS) else "Поиск общий"
-    if _is_direct(trf) and not src:                          return "Прямой трафик"
-    return None
+    if _is_organic(trf) and not src:                         return "Поисковый (SEO)"
+    if _is_direct(trf) and not src:                          return "Прямые заходы"
+    return "Прочее"
 
 
 async def _fetch(token: str, counter_id: str, date1: str, date2: str,
@@ -134,8 +146,6 @@ def _aggregate(rows: list[dict]) -> dict[str, dict]:
             dims[1].get("name") or "", dims[2].get("name") or "",
             dims[3].get("name") or "", dims[0].get("name") or "",
         )
-        if not channel:
-            continue
 
         if channel not in result:
             result[channel] = {"visitors": 0, "bounces": 0.0,
@@ -189,7 +199,7 @@ def _totals(channels: dict) -> dict:
     return t
 
 
-# ── Эндпоинт ─────────────────────────────────────────────────────────────────
+# ── Эндпоинт: таблица каналов ────────────────────────────────────────────────
 
 @router.get("")
 async def get_channels(
@@ -247,3 +257,57 @@ async def get_channels(
 
     return {"channels": channels, "totals": _totals(channels),
             "period": period, "section": section}
+
+
+# ── Эндпоинт: история за 6 месяцев ───────────────────────────────────────────
+
+@router.get("/history")
+async def get_channels_history(
+    period:       str  = Query(...,      description="YYYY-MM — конечный месяц"),
+    section:      str  = Query("hotels", description="hotels | franchise | uk"),
+    current_user: User = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Returns last 6 months of summary data (visits, calls, bookings)."""
+    token = await TokenService.get_decrypted_token(db, str(current_user.id))
+    if not token:
+        raise HTTPException(403, "Токен Яндекс.Метрики не найден.")
+
+    result = await db.execute(
+        select(Website).where(Website.user_id == current_user.id).limit(1)
+    )
+    website    = result.scalar_one_or_none()
+    counter_id = str(website.counter_id) if website else "40050615"
+
+    if section not in SECTION_FILTERS:
+        raise HTTPException(400, f"Неизвестный раздел: {section}")
+
+    sf = SECTION_FILTERS[section]
+    months = _prev_period_n(period, 6)
+
+    async def _fetch_month(p: str) -> dict:
+        try:
+            d1, d2 = _period_dates(p)
+            rows = await _fetch(token, counter_id, d1.isoformat(), d2.isoformat(), sf)
+            agg = _aggregate(rows)
+            totals = _totals(agg)
+            return {
+                "period":   p,
+                "visitors": totals.get("visitors") or 0,
+                "calls":    totals.get("calls")    or 0,
+                "bookings": totals.get("bookings") or 0,
+            }
+        except Exception:
+            return {"period": p, "visitors": 0, "calls": 0, "bookings": 0}
+
+    try:
+        results = await asyncio.gather(*[_fetch_month(m) for m in months])
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(502, f"Яндекс.Метрика API: {e.response.status_code} — {e.response.text[:300]}")
+    except Exception as e:
+        raise HTTPException(502, f"Ошибка запроса к Метрике: {e}")
+
+    return {
+        "months": months,
+        "data":   list(results),
+    }
