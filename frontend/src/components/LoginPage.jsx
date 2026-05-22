@@ -4,6 +4,7 @@ import { login } from '../api'
 export default function LoginPage({ onLogin }) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
+  const [showPwd,  setShowPwd]  = useState(false)
   const [error,    setError]    = useState(null)
   const [loading,  setLoading]  = useState(false)
 
@@ -46,15 +47,25 @@ export default function LoginPage({ onLogin }) {
 
           <div>
             <label className="block text-xs text-muted mb-1 uppercase tracking-wider">Пароль</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-input border border-border rounded-md px-3 py-2 text-fg text-sm
-                         focus:outline-none focus:border-gold transition-colors"
-              placeholder="••••••••"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showPwd ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-input border border-border rounded-md px-3 py-2 pr-10 text-fg text-sm
+                           focus:outline-none focus:border-gold transition-colors"
+                placeholder="••••••••"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(v => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-fg transition-colors px-1"
+                tabIndex={-1}
+              >
+                {showPwd ? '🙈' : '👁'}
+              </button>
+            </div>
           </div>
 
           {error && (
